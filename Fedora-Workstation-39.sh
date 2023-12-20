@@ -14,7 +14,10 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
-#this is fork of tommytran732's fedora setup script. Many changes are made for my personal usage and you can easily make further changes as per your needs too. Most notable changes are explained here. You can check readme.md for more deatils on what has changed compared to tommy's setup script. 
+# This is fork of tommytran732's fedora setup script. Many changes are made for my personal usage and you can easily make further changes as per your needs too. Most notable changes are explained here. You can check readme.md for more deatils on what has changed compared to tommy's setup script. 
+
+# To run this script and create a log file of output. Type the command below in terminal
+# ./Fedora-Workstation-39.sh | tee ./Fedora-Workstation-39.log
 
 output(){
     echo 'Your Fedora Workstation is getting ready';
@@ -24,7 +27,6 @@ output(){
 unpriv(){
     sudo -u nobody "$@"
 }
-
 
 # Moving to the home directory
 
@@ -44,6 +46,11 @@ sudo systemctl mask debug-shell.service
 sudo systemctl mask kdump.service
 echo 'CtrlAltDelBurstAction=none' | sudo tee -a /etc/systemd/system.conf
 
+# Arkenfox setup
+# Please install uBlock origin by yourself and enable AdGuard URL Tracking Protection Filter along with https://raw.githubusercontent.com/DandelionSprout/adfilt/master/LegitimateURLShortener.txt
+
+unpriv curl https://raw.githubusercontent.com/arkenfox/user.js/master/user.js | sudo tee /usr/lib/firefox/browser/default/preferences/user.js
+
 # Setup NTS using GrapheneOS Chrony Configuration because it's quite solid as it makes use of over 4 different pools and it's encrypted
 
 sudo rm -rf /etc/chrony/chrony.conf
@@ -51,6 +58,10 @@ unpriv curl https://raw.githubusercontent.com/GrapheneOS/infrastructure/main/chr
 echo '#Command-line options for chronyd
 OPTIONS="-F 1"' | sudo tee /etc/sysconfig/chronyd
 sudo systemctl restart chronyd
+
+# Enabled DNSSEC in resolv.conf because by default it is disabled
+
+unpriv curl main/etc/systemd/resolved.conf.d/resolv.conf | sudo tee /usr/lib/systemd/resolved.conf.d/resolv.conf
 
 # Setup Networking and enable mac randomization
 
@@ -88,6 +99,8 @@ sudo mkdir -p /etc/systemd/system/irqbalance.service.d
 unpriv curl https://gitlab.com/divested/brace/-/raw/master/brace/usr/lib/systemd/system/NetworkManager.service.d/99-brace.conf | sudo tee /etc/systemd/system/NetworkManager.service.d/99-brace.conf
 unpriv curl https://gitlab.com/divested/brace/-/raw/master/brace/usr/lib/systemd/system/irqbalance.service.d/99-brace.conf | sudo tee /etc/systemd/system/irqbalance.service.d/99-brace.conf
 sudo sh -c 'systemctl restart NetworkManager && systemctl restart irqbalance'
+
+unpriv curl https://gitlab.com/divested/brace/-/blob/master/brace/usr/lib/systemd/system/tor.service.d/99-brace.conf | sudo tee /etc/systemd/system/tor.service.d/99-brace.conf
 
 # Disable automount
 
@@ -135,7 +148,6 @@ sudo dnf remove -y rhythmbox yelp evince libreoffice* cheese file-roller* lvm2 r
 
 # Disable openh264 Repository and Third-Party repositories including everything from flathub.org, google-chrome, phracek-PyCharm, rpmfusion-nonfree-steam
 # You can enable any repository later by going in store settings later
-
 sudo dnf config-manager --set-disabled fedora-cisco-openh264 flathub google-chrome phracek-PyCharm rpmfusion-nonfree-steam
 
 # gnome-console here will replace gnome-terminal and there are other packages I use on my Fedora workstation. You can add more packages from fedora repositery in the above line.
@@ -144,8 +156,12 @@ sudo dnf -y install gnome-console git-core gnome-shell-extension-appindicator gn
 
 # Install LibreWolf or Brave Browser or Both
 
+echo 'Note: Use of a single browser is recommended because of higher attack surface of a browser. Firefox is already configured by default. You will have to add uBlock by yourself. if you choose other browsers like Brave then make sure to harden it by yourself because it will be set to default unlike librewolf/firefox which is already configured. \n'
+
 read -n -p "Enter '1' for Librewolf. Enter '2' for Brave Browser. Enter '3' for both LibreWolf and Brave Browser. Enter 0 to skip: " browser
+
 case $browser in
+    
     "1")
     output 'Installing LibreWolf as your browser of choice.'
     sudo rpm --import https://keys.openpgp.org/vks/v1/by-fingerprint/034F7776EF5E0C613D2F7934D29FBD5F93C0CFC3
@@ -153,6 +169,7 @@ case $browser in
     sudo dnf install librewolf -y
     output 'LibreWolf has been successfully installed on your system'
     ;;
+    
     "2")
     output 'Installing Brave Browser as your browser of choice.'
     sudo dnf install dnf-plugins-core
@@ -161,6 +178,7 @@ case $browser in
     sudo dnf install brave-browser
     output 'Brave Browser has been successfully installed on your system'
     ;;
+    
     "3")
     output 'Installing LibreWolf & Brave Browser as your primary browsers.'
     sudo rpm --import https://keys.openpgp.org/vks/v1/by-fingerprint/034F7776EF5E0C613D2F7934D29FBD5F93C0CFC3
@@ -172,9 +190,11 @@ case $browser in
     sudo -- sh -c 'dnf install librewolf -y; dnf install brave-browser y'
     output 'LibreWolf & Brave Browser have been successfully installed on your system'
     ;;
+    
     *)
     output 'No browser is being installed as per your previous input'
     ;;
+
 esac
 
 # Enable auto TRIM
@@ -225,6 +245,7 @@ mkdir -p ~/.config/firejail/
 # Install Divested Unofficial hardened_malloc
 
 read -n -p "Type '1' if you want to install hardened_malloc from divest (Note: hardened_malloc can cause breakage on some apps) Skip by typing '0' if you're not sure" malloc
+
 MACHINE_TYPE=$(uname -m)
 if [$malloc==1]
 then
@@ -242,14 +263,19 @@ if [ "$virt_type" = '' ]; then
     sudo dracut -f
 fi
 
-# Saving output of this script at the same time while executing in a log file
+# Enabling automatic updates
 
-if [ -z "$SCRIPT" ]; then 
-    /usr/bin/script log.txt /bin/bash -c "$0 $*"
-    exit 0
-fi
+if [ -f /etc/fedora-release ];
+then
+	output 'Enabling automatic updates';
+	dnf install dnf-automatic rpm-plugin-systemd-inhibit;
+	systemctl enable dnf-automatic-install.timer --now;
+fi;
+
 
 # Remove gnome-terminal becauase gnome-console will replace it 
+
 sudo dnf remove gnome-terminal -y
 
-#gnome-text-editor and restored mediawriter, librewolf, brave choice, hardened_malloc if x86_64, firejail, torbrowser required packages added
+#keeping gnome-text-editor and mediawriter, librewolf or Brave as the only choices of browsers (Firefox will be already installed), hardened_malloc if x86_64/aarch64, Firejail, TODO: Add tor-browser required packages
+
