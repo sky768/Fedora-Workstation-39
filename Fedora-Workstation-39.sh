@@ -61,12 +61,13 @@ sudo systemctl restart chronyd
 
 # Enabled DNSSEC in resolv.conf because by default it is disabled
 
-unpriv curl main/etc/systemd/resolved.conf.d/resolv.conf | sudo tee /usr/lib/systemd/resolved.conf.d/resolv.conf
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/systemd/resolved.conf.d/resolv.conf | sudo tee /usr/lib/systemd/resolved.conf.d/resolv.conf
 
 # Setup Networking and enable mac randomization
 
-unpriv curl main/etc/NetworkManager/conf.d/00-macrandomize.conf | sudo tee /etc/NetworkManager/conf.d/00-macrandomize.conf
-unpriv curl main/etc/NetworkManager/conf.d/01-transient-hostname.conf | sudo tee /etc/NetworkManager/conf.d/01-transient-hostname.conf
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/NetworkManager/conf.d/00-macrandomize.conf | sudo tee /etc/NetworkManager/conf.d/00-macrandomize.conf
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/NetworkManager/conf.d/01-transient-hostname.conf | sudo tee /etc/NetworkManager/conf.d/01-transient-hostname.conf
+
 sudo nmcli general reload conf
 sudo hostnamectl hostname 'localhost'
 sudo hostnamectl --transient hostname ''
@@ -76,9 +77,11 @@ sudo firewall-cmd --reload
 sudo firewall-cmd --lockdown-on
 
 # Harden SSH by turning off X11 forwarding, making use of ONLY ed22519 keys, setting cipher to aes256-gcm@openssh.com, disabling password authentication and root login
+
 #echo 'PermitRootLogin no' | sudo tee /etc/ssh/ssh_config.d/10-custom.conf
 #echo 'GSSAPIAuthentication no' | sudo tee /etc/ssh/ssh_config.d/10-custom.conf
 
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/ssh/sshd_config/10-custom.conf | sudo tee /etc/ssh/ssh_config.d/10-custom.conf
 echo 'VerifyHostKeyDNS yes' | sudo tee -a /etc/ssh/ssh_config.d/10-custom.conf
 sudo chmod 644 /etc/ssh/ssh_config.d/10-custom.conf
 
@@ -104,8 +107,8 @@ unpriv curl https://gitlab.com/divested/brace/-/blob/master/brace/usr/lib/system
 
 # Disable automount
 
-unpriv curl  | sudo tee /etc/dconf/db/local.d/automount-disable
-unpriv curl  | sudo tee /etc/dconf/db/local.d/locks/automount-disable
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/dconf/db/local.d/automount-disable | sudo tee /etc/dconf/db/local.d/automount-disable
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/dconf/db/local.d/locks/automount-disable | sudo tee /etc/dconf/db/local.d/locks/automount-disable
 
 sudo dconf update
 
@@ -113,7 +116,7 @@ sudo dconf update
 echo -e '[zram0]\nzram-fraction = 1\nmax-zram-size = 8192\ncompression-algorithm = zstd' | sudo tee /etc/systemd/zram-generator.conf
 
 # Speed up DNF
-unpriv curl  | sudo tee /etc/dnf/dnf.conf
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/dnf/dnf.conf | sudo tee /etc/dnf/dnf.conf
 sudo sed -i 's/^metalink=.*/&\&protocol=https/g' /etc/yum.repos.d/*
 
 # Remove firefox packages
@@ -204,13 +207,15 @@ sudo systemctl enable fstrim.timer
 
 # The Linux Vendor Firmware Service is a secure portal which allows hardware vendors to upload firmware updates.
 
-echo 'UriSchemes=file;https' | sudo tee -a /etc/fwupd/fwupd.conf
+unpriv curl https://raw.githubusercontent.com/sky768/Fedora-Workstation-39/master/etc/systemd/system/fwupd-refresh.service.d/override.conf | sudo tee /etc/systemd/system/fwupd-refresh.service.d/override.conf
+echo 'UriSchemes=file;https' | sudo tee -a /etc/fwupd/.conf
 sudo systemctl restart fwupd
 
 # Differentiating bare metal and virtual installs
 # Installing tuned first here because virt-what is 1 of its dependencies anyways
 
 sudo dnf install tuned -y
+
 virt_type=$(virt-what)
 if [ "$virt_type" = '' ]; then
     output 'Virtualization: Bare Metal.'
@@ -254,28 +259,29 @@ then
 fi
 
 # Install Divested real-ucode 
-
-if [ "$virt_type" = '' ]; then
-    sudo dnf install 'https://divested.dev/rpm/fedora/divested-release-20230406-2.noarch.rpm'
-    sudo sed -i 's/^metalink=.*/&?protocol=https/g' /etc/yum.repos.d/divested-release.repo
-    sudo dnf config-manager --save --setopt=divested.includepkgs=divested-release,real-ucode,microcode_ctl,amd-ucode-firmware
-    sudo dnf install real-ucode
-    sudo dracut -f
+if [ "$virt_type" = '' ];
+then
+    sudo dnf install 'https://divested.dev/rpm/fedora/divested-release-20230406-2.noarch.rpm';
+    sudo sed -i 's/^metalink=.*/&?protocol=https/g' /etc/yum.repos.d/divested-release.repo;
+    sudo dnf config-manager --save --setopt=divested.includepkgs=divested-release,real-ucode,microcode_ctl,amd-ucode-firmware;
+    sudo dnf install real-ucode;
+    sudo dracut -f;
+    exit 0;
 fi
 
 # Enabling automatic updates
+
 
 if [ -f /etc/fedora-release ];
 then
 	output 'Enabling automatic updates';
 	dnf install dnf-automatic rpm-plugin-systemd-inhibit;
 	systemctl enable dnf-automatic-install.timer --now;
+    exit 0;
 fi;
-
 
 # Remove gnome-terminal becauase gnome-console will replace it 
 
 sudo dnf remove gnome-terminal -y
 
 #keeping gnome-text-editor and mediawriter, librewolf or Brave as the only choices of browsers (Firefox will be already installed), hardened_malloc if x86_64/aarch64, Firejail, TODO: Add tor-browser required packages
-
